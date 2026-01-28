@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Gym Voice</title>
+
+  <style>
+    body {
+      font-family: system-ui;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: #0f172a;
+      color: white;
+    }
+
+    #recordBtn {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: #22c55e;
+      border: none;
+      font-size: 60px;
+      cursor: pointer;
+    }
+
+    #recordBtn:active {
+      transform: scale(0.95);
+    }
+
+    #lastEntry {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 16px;
+      min-height: 60px;
+    }
+
+    #progressBtn {
+      margin-top: auto;
+      width: 100%;
+      padding: 16px;
+      background: #1e293b;
+      border: none;
+      color: white;
+      font-size: 18px;
+    }
+
+    #progress {
+      padding: 16px;
+      white-space: pre-wrap;
+      width: 100%;
+      background: #020617;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- BOTÓN PRINCIPAL -->
+  <button id="recordBtn">🏋️</button>
+
+  <div id="lastEntry">Pulsa y habla</div>
+
+  <!-- PROGRESO -->
+  <button id="progressBtn" onclick="showProgress()">📊 Ver progreso semanal</button>
+  <div id="progress"></div>
+
+<script>
+const SpeechRecognition =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new SpeechRecognition();
+recognition.lang = "es-ES";
+
+document.getElementById("recordBtn").onclick = () => recognition.start();
+
+recognition.onresult = (event) => {
+  const text = event.results[0][0].transcript.toLowerCase();
+  const entry = parseTraining(text);
+  saveEntry(entry);
+};
+
+function parseTraining(text) {
+  const entry = {
+    date: new Date().toISOString(),
+    exercise: "desconocido",
+    weight: null,
+    reps: null
+  };
+
+  const w = text.match(/(\d+(\.\d+)?)\s?(kg|kilos?)/);
+  if (w) entry.weight = parseFloat(w[1]);
+
+  const r = text.match(/(\d+)\s?(reps?|repeticiones?)/);
+  if (r) entry.reps = parseInt(r[1]);
+
+  entry.exercise = text
+    .replace(/(\d+(\.\d+)?\s?(kg|kilos?)|\d+\s?(reps?|repeticiones?))/g, "")
+    .trim();
+
+  return entry;
+}
+
+function saveEntry(entry) {
+  let log = JSON.parse(localStorage.getItem("trainLog")) || [];
+  log.push(entry);
+  localStorage.setItem("trainLog", JSON.stringify(log));
+
+  document.getElementById("lastEntry").textContent =
+    `${entry.exercise}
+${entry.weight || "?"} kg x ${entry.reps || "?"} reps`;
+}
+
+function getWeekKey(date) {
+  const d = new Date(date);
+  d.setDate(d.getDate() - d.getDay());
+  return d.toISOString().slice(0, 10);
+}
+
+function showProgress() {
+  const log = JSON.parse(localStorage.getItem("trainLog")) || [];
+  const weeks = {};
+
+  log.forEach(e => {
+    if (!e.weight || !e.reps) return;
+    const week = getWeekKey(e.date);
+    const vol = e.weight * e.reps;
+
+    weeks[week] ??= {};
+    weeks[week][e.exercise] ??= 0;
+    weeks[week][e.exercise] += vol;
+  });
+
+  const keys = Object.keys(weeks).sort();
+  if (keys.length < 2) {
+    document.getElementById("progress").textContent =
+      "Aún no hay suficientes datos.";
+    return;
+  }
+
+  const last = weeks[keys.at(-1)];
+  const prev = weeks[keys.at(-2)];
+
+  let out = "📈 PROGRESO SEMANAL\n\n";
+
+  for (let ex in last) {
+    const diff = last[ex] - (prev[ex] || 0);
+    out += diff > 0
+      ? `✅ ${ex}: progreso\n`
+      : diff < 0
+      ? `⚠️ ${ex}: bajada\n`
+      : `➖ ${ex}: estable\n`;
+  }
+
+  document.getElementById("progress").textContent = out;
+}
+</script>
+
+</body>
+</html>
